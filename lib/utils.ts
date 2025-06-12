@@ -1,6 +1,6 @@
-import { type ClassValue, clsx } from 'clsx'
-import { twMerge } from 'tailwind-merge'
-import { CreditCard, FilterOptions } from './types'
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
+import { CreditCard, FilterOptions } from "./types"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -14,89 +14,123 @@ export function formatCurrency(amount: number): string {
   }).format(amount)
 }
 
-export function filterCards(cards: CreditCard[], filters: Partial<FilterOptions>): CreditCard[] {
+export function getUniqueValues<T extends keyof CreditCard>(
+  cards: CreditCard[],
+  key: T
+): CreditCard[T][] {
+  const values = cards.map(card => card[key])
+  return [...new Set(values)]
+}
+
+export function filterCards(
+  cards: CreditCard[],
+  filters: Partial<FilterOptions>
+): CreditCard[] {
   return cards.filter(card => {
     // Bank filter
-    if (filters.banks && filters.banks.length > 0 && !filters.banks.includes(card.bank)) {
-      return false
+    if (filters.banks && filters.banks.length > 0) {
+      if (!filters.banks.includes(card.bank)) return false
     }
 
     // Category filter
-    if (filters.categories && filters.categories.length > 0 && !filters.categories.includes(card.category)) {
-      return false
-    }
-
-    // Lounge access filter
-    if (filters.loungeAccess !== null && filters.loungeAccess !== undefined && card.loungeAccess !== filters.loungeAccess) {
-      return false
-    }
-
-    // Fuel cashback filter
-    if (filters.fuelCashback !== null && filters.fuelCashback !== undefined && card.fuelCashback !== filters.fuelCashback) {
-      return false
-    }
-
-    // No annual fee filter
-    if (filters.noAnnualFee && card.annualFee > 0) {
-      return false
+    if (filters.categories && filters.categories.length > 0) {
+      if (!filters.categories.includes(card.category)) return false
     }
 
     // Network type filter
-    if (filters.networkTypes && filters.networkTypes.length > 0 && !filters.networkTypes.includes(card.networkType)) {
-      return false
+    if (filters.networkTypes && filters.networkTypes.length > 0) {
+      if (!filters.networkTypes.includes(card.networkType)) return false
+    }
+
+    // Lounge access filter
+    if (filters.loungeAccess !== null && filters.loungeAccess !== undefined) {
+      if (card.loungeAccess !== filters.loungeAccess) return false
+    }
+
+    // Fuel cashback filter
+    if (filters.fuelCashback !== null && filters.fuelCashback !== undefined) {
+      if (card.fuelCashback !== filters.fuelCashback) return false
+    }
+
+    // No annual fee filter
+    if (filters.noAnnualFee !== null && filters.noAnnualFee !== undefined) {
+      if (filters.noAnnualFee && card.annualFee > 0) return false
     }
 
     // Max annual fee filter
-    if (filters.maxAnnualFee !== null && filters.maxAnnualFee !== undefined && card.annualFee > filters.maxAnnualFee) {
-      return false
+    if (filters.maxAnnualFee !== null && filters.maxAnnualFee !== undefined) {
+      if (card.annualFee > filters.maxAnnualFee) return false
     }
 
     return true
   })
 }
 
-export function searchCards(cards: CreditCard[], query: string): CreditCard[] {
-  const searchTerms = query.toLowerCase().split(' ')
+export function sortCards(
+  cards: CreditCard[],
+  sortBy: keyof CreditCard,
+  order: 'asc' | 'desc' = 'asc'
+): CreditCard[] {
+  return [...cards].sort((a, b) => {
+    const aValue = a[sortBy]
+    const bValue = b[sortBy]
+
+    // Handle string values
+    if (typeof aValue === 'string' && typeof bValue === 'string') {
+      const comparison = aValue.localeCompare(bValue)
+      return order === 'asc' ? comparison : -comparison
+    }
+
+    // Handle number values
+    if (typeof aValue === 'number' && typeof bValue === 'number') {
+      const comparison = aValue - bValue
+      return order === 'asc' ? comparison : -comparison
+    }
+
+    // Handle boolean values
+    if (typeof aValue === 'boolean' && typeof bValue === 'boolean') {
+      const comparison = Number(aValue) - Number(bValue)
+      return order === 'asc' ? comparison : -comparison
+    }
+
+    return 0
+  })
+}
+
+export function searchCards(
+  cards: CreditCard[],
+  query: string
+): CreditCard[] {
+  if (!query.trim()) return cards
+
+  const searchTerm = query.toLowerCase().trim()
   
   return cards.filter(card => {
-    const searchableText = [
-      card.name,
-      card.bank,
-      card.category,
-      card.rewardType,
-      card.eligibility,
-      ...card.benefits,
-      ...card.bestFor,
-      card.networkType
-    ].join(' ').toLowerCase()
-
-    return searchTerms.every(term => searchableText.includes(term))
+    // Search in card name
+    if (card.name.toLowerCase().includes(searchTerm)) return true
+    
+    // Search in bank name
+    if (card.bank.toLowerCase().includes(searchTerm)) return true
+    
+    // Search in category
+    if (card.category.toLowerCase().includes(searchTerm)) return true
+    
+    // Search in benefits
+    if (card.benefits.some(benefit => 
+      benefit.toLowerCase().includes(searchTerm)
+    )) return true
+    
+    // Search in best for categories
+    if (card.bestFor.some(category => 
+      category.toLowerCase().includes(searchTerm)
+    )) return true
+    
+    // Search in reward type
+    if (card.rewardType.toLowerCase().includes(searchTerm)) return true
+    
+    // Search in network type
+    if (card.networkType.toLowerCase().includes(searchTerm)) return true
+    
+    return false
   })
 }
-
-export function getUniqueValues<T>(array: T[], key: keyof T): T[keyof T][] {
-  return Array.from(new Set(array.map(item => item[key])))
-}
-
-export function sortCards(cards: CreditCard[], sortBy: 'name' | 'annualFee' | 'cashbackRate' | 'bank', order: 'asc' | 'desc' = 'asc'): CreditCard[] {
-  return [...cards].sort((a, b) => {
-    let valueA: any = a[sortBy]
-    let valueB: any = b[sortBy]
-
-    if (sortBy === 'cashbackRate') {
-      valueA = parseFloat(a.cashbackRate.replace('%', ''))
-      valueB = parseFloat(b.cashbackRate.replace('%', ''))
-    }
-
-    if (typeof valueA === 'string') {
-      valueA = valueA.toLowerCase()
-      valueB = valueB.toLowerCase()
-    }
-
-    if (order === 'asc') {
-      return valueA < valueB ? -1 : valueA > valueB ? 1 : 0
-    } else {
-      return valueA > valueB ? -1 : valueA < valueB ? 1 : 0
-    }
-  })
-} 
